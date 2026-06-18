@@ -8,7 +8,7 @@ Upstream processing was performed externally using Kraken2, Bracken, metaSourceT
 
 ## Features
 
-* Sequencing depth normalization using:
+* Sequencing normalization using:
 
   * CSS (Cumulative Sum Scaling via metagenomeSeq)
   * TMM (Trimmed Mean by M-Values via edgeR)
