@@ -395,8 +395,8 @@ analyze_landuse <- function(med_mat, groupings, state_col, buffer_col, permutati
 }
 
 lu_results <- list(
-  GA_lu = analyze_landuse(med_mat, groupings, "GASites",  "QuartMile"),
-  OR_lu = analyze_landuse(med_mat, groupings, "ORSites",  "QuartMile")
+  GA_lu = analyze_landuse(med_mat, groupings, "GASites",  "onekm"),
+  OR_lu = analyze_landuse(med_mat, groupings, "ORSites",  "onekm")
 )
 
 collect_lu_anosim <- function(results_list) {
@@ -761,7 +761,7 @@ generate_filtered_list <- function(otus_mat, samples, prefix) {
 }
 
 drop_samples  <- c("CHICKEN_SCH_SHER_9_7_21", "SCOGGINS_DAMDIS_8_9_22") # ANCOM-BC2 requires >= samples
-run_locations <- c("State", "GASite", "ORSite", "QuartMile")
+run_locations <- c("State", "GASite", "ORSite", "onekm")
 corrections   <- c("bonferroni")
 
 get_samples_for_run <- function(loc, metadata, drop_samples) {
@@ -770,7 +770,7 @@ get_samples_for_run <- function(loc, metadata, drop_samples) {
     "State"     = all_samples,
     "GASite"    = rownames(subset(metadata, State == "Georgia" & !rownames(metadata) %in% drop_samples)),
     "ORSite"    = rownames(subset(metadata, State == "Oregon"  & !rownames(metadata) %in% drop_samples)),
-    "QuartMile" = rownames(subset(metadata, !is.na(QuartMile))),
+    "onekm" = rownames(subset(metadata, !is.na(onekm))),
     stop(paste("Unknown loc:", loc))
   )
 }
@@ -780,7 +780,7 @@ get_meta_col <- function(loc) {
     "State"     = "State",
     "GASite"    = "GASite",
     "ORSite"    = "ORSite",
-    "QuartMile" = "QuartMile",
+    "onekm" = "onekm",
     stop(paste("Unknown loc:", loc))
   )
 }
