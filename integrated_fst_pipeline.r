@@ -1,10 +1,9 @@
 # ---------------------------------------------------------------------------------------------------------------#
-# Integrated FST Pipeline - J.R. Phaneuf 2025
+# Integrated FST Pipeline - J.R. Phaneuf 2026
 #
-# Full pipeline for testing four sequencing depth normalization methods (CSS with metagenomeSeq, TMM with
-# edgeR, and MED/VST with DESeq2), calculating Bray-Curtis distances, investigating beta diversity significance
-# with ANOSIM, NMDS visualization, running FEAST, calculating correlation coefficients between bioinformatic
-# tools and dPCR markers, completing differential abundance analyses with ANCOM-BC2, and creating figures.
+# Full pipeline for testing four sequencing depth normalization methods (CSS with metagenomeSeq, TMM with edgeR, and MED/VST with DESeq2), 
+# calculating Bray-Curtis distances, NMDS visualization, running FEAST, calculating correlation coefficients between bioinformatic tools
+# and dPCR markers, completing differential abundance analyses with ANCOM-BC2, and creating figures.
 #
 # For Step 1, only Bracken outputs and a grouping metadata file are required to begin.
 # For Step 2, tool metadata and "Source" OTUs in the read table are required.
@@ -144,37 +143,7 @@ group_col    <- "State"
 group_col_ga <- "GASites"
 group_col_or <- "ORSites"
 
-# --- 1c: Pairwise ANOSIM function ---
-pairwise_anosim <- function(dist_matrix, groups, permutations = 999) {
-  groups <- as.factor(groups)
-  combs  <- combn(levels(groups), 2)
-  results <- data.frame(Group1 = character(), Group2 = character(),
-                        R = numeric(), p = numeric(), stringsAsFactors = FALSE)
-  for (i in seq_len(ncol(combs))) {
-    g1 <- combs[1, i]
-    g2 <- combs[2, i]
-    subset_idx <- which(groups %in% c(g1, g2))
-    if (length(subset_idx) < 3) {
-      res_p <- NA; res_r <- NA
-    } else {
-      sub_dist <- as.dist(as.matrix(dist_matrix)[subset_idx, subset_idx])
-      anos     <- anosim(sub_dist, groups[subset_idx], permutations = permutations)
-      res_p    <- anos$signif
-      res_r    <- anos$statistic
-    }
-    results <- rbind(results, data.frame(
-      Group1 = g1, Group2 = g2,
-      R = ifelse(is.na(res_r), NA, round(res_r, 3)),
-      p = res_p
-    ))
-  }
-  results$FDR <- p.adjust(results$p, method = "fdr")
-  results$p   <- signif(results$p,   3)
-  results$FDR <- signif(results$FDR, 3)
-  return(results)
-}
-
-# --- 1d: Normalization, Bray-Curtis, and ANOSIM analysis functions ---
+# --- 1c: Normalization and Bray-Curtis analysis functions ---
 run_analysis <- function(otu_table, groupings,
                          group_col    = "State",
                          group_col_ga = "GASites",
@@ -238,15 +207,11 @@ run_analysis <- function(otu_table, groupings,
     )
     site_vec <- factor(groupings$Site[idx])
 
-    anosim_res   <- anosim(dist_mat, grouping = group_vec, permutations = 999)
-    pairwise_res <- pairwise_anosim(dist_mat, group_vec)
     nmds_res     <- metaMDS(dist_mat, k = 2, trymax = 100)
     coords       <- scores(nmds_res, display = "sites")
 
     results_list[[subset_name]] <- list(
       dist           = dist_mat,
-      anosim         = anosim_res,
-      pairwise_anosim = pairwise_res,
       coords         = coords,
       stress         = nmds_res$stress,
       group_vector   = group_vec,
@@ -257,14 +222,14 @@ run_analysis <- function(otu_table, groupings,
   return(results_list)
 }
 
-# --- 1e: Run all four normalization methods ---
+# --- 1d: Run all four normalization methods ---
 set.seed(123)
 css_results <- run_analysis(otu_table, groupings, method = "CSS")
 tmm_results <- run_analysis(otu_table, groupings, method = "TMM")
 med_results <- run_analysis(otu_table, groupings, method = "MED")
 vst_results <- run_analysis(otu_table, groupings, method = "VST")
 
-# --- 1f: Collect and save NMDS stress values ---
+# --- 1e: Collect and save NMDS stress values ---
 collect_nmds_stress <- function(results_list, method_name) {
   stress_df <- data.frame(Method = character(), Subset = character(),
                           Stress = numeric(), stringsAsFactors = FALSE)
@@ -286,33 +251,7 @@ stress_all <- rbind(
 write.csv(stress_all, "nmds_stress_values.csv", row.names = FALSE)
 # The MED normalization method produced the lowest stress values, used here onward. 
 
-# --- 1g: Collect and save MED ANOSIM results (UPDATE BASED ON CHOSEN NORMALIZATION METHOD) ---
-collect_anosim_results <- function(results_list, method_name = "MED") {
-  all_res <- data.frame()
-  for (subset_name in names(results_list)) {
-    anosim_res <- results_list[[subset_name]]$anosim
-    overall    <- data.frame(Method = method_name, Subset = subset_name,
-                             Comparison = "Overall", R = anosim_res$statistic,
-                             p = anosim_res$signif, FDR = NA)
-    pairwise   <- results_list[[subset_name]]$pairwise_anosim
-    if (!is.null(pairwise) && nrow(pairwise) > 0) {
-      pairwise_df <- data.frame(
-        Method     = method_name, Subset = subset_name,
-        Comparison = paste(pairwise$Group1, "vs", pairwise$Group2),
-        R = pairwise$R, p = pairwise$p, FDR = pairwise$FDR
-      )
-      all_res <- rbind(all_res, rbind(overall, pairwise_df))
-    } else {
-      all_res <- rbind(all_res, overall)
-    }
-  }
-  return(all_res)
-}
-
-med_anosim <- collect_anosim_results(med_results)
-write.csv(med_anosim, "anosim_med_results.csv", row.names = FALSE)
-
-# --- 1h: NMDS visualizations ---
+# --- 1f: NMDS visualizations ---
 
 # Color / shape palettes
 all_shapes <- c(1,0,2,3,6,7,9,10,11,5,12,13,16,14,8,4)
@@ -372,7 +311,7 @@ nmds_or <- ggplot(df_nm_or, aes(x = NMDS1, y = NMDS2, color = group_vector)) +
   theme_nmds(legend_text_size = 12, title_size = 12)
 nmds_or
 
-# --- 1i: Land use significance on diversity ---
+# --- 1g: Land use and diversity ---
 med_mat <- read.csv("MED_otus.csv", row.names = 1, check.names = FALSE)
 
 analyze_landuse <- function(med_mat, groupings, state_col, buffer_col, permutations = 999) {
@@ -386,12 +325,8 @@ analyze_landuse <- function(med_mat, groupings, state_col, buffer_col, permutati
                            levels = unique(groupings[[buffer_col]][valid]))
   coords$Site   <- factor(groupings[[state_col]][valid],
                            levels = unique(groupings[[state_col]][valid]))
-  group_vec    <- factor(groupings[[buffer_col]][valid])
-  anosim_res   <- anosim(dist_mat, grouping = group_vec, permutations = permutations)
-  pairwise_res <- pairwise_anosim(dist_mat, group_vec, permutations = permutations)
   list(dist     = dist_mat, nmds   = nmds_res, coords = coords,
-       stress   = round(nmds_res$stress, 3),
-       anosim   = anosim_res, pairwise = pairwise_res, valid = valid)
+       stress   = round(nmds_res$stress, 3))
 }
 
 lu_results <- list(
@@ -399,31 +334,7 @@ lu_results <- list(
   OR_lu = analyze_landuse(med_mat, groupings, "ORSites",  "onekm")
 )
 
-collect_lu_anosim <- function(results_list) {
-  all_res <- data.frame()
-  for (subset_name in names(results_list)) {
-    anosim_res <- results_list[[subset_name]]$anosim
-    overall    <- data.frame(Subset = subset_name, Comparison = "Overall",
-                             R = anosim_res$statistic, p = anosim_res$signif, FDR = NA)
-    pairwise   <- results_list[[subset_name]]$pairwise
-    if (!is.null(pairwise) && nrow(pairwise) > 0) {
-      pairwise_df <- data.frame(
-        Subset     = subset_name,
-        Comparison = paste(pairwise$Group1, "vs", pairwise$Group2),
-        R = pairwise$R, p = pairwise$p, FDR = pairwise$FDR
-      )
-      all_res <- rbind(all_res, rbind(overall, pairwise_df))
-    } else {
-      all_res <- rbind(all_res, overall)
-    }
-  }
-  return(all_res)
-}
-
-landuse_anosim <- collect_lu_anosim(lu_results)
-write.csv(landuse_anosim, "anosim_landuse_results.csv", row.names = FALSE)
-
-# --- 1j: NMDS land use visualizations ---
+# --- 1h: NMDS land use visualizations ---
 lu_colors <- c("Agriculture" = "#FF7F0E", "Industrial" = "#D62728",
                 "Forest/Parks" = "#2CA02C", "Residential" = "#1F77B4")
 
