@@ -417,12 +417,13 @@ FEAST_output <- FEAST(C = otus, metadata = feast_metadata, different_sources_fla
 # ---------------------------------------------------------------------------------------------------------------#
 
 # --- 3a: Load and pivot apportionments ---
-markers <- read.csv("markers_apportions.csv", stringsAsFactors = FALSE)
+markers <- read.csv("markers_apportions.csv", stringsAsFactors = FALSE, check.names = FALSE)
 markers_clean <- markers %>%
-  mutate(across(-Sample, ~ as.numeric(str_remove(., "%"))))
+  dplyr::rename(Nd = nonpareil) %>%
+  mutate(across(-c(Sample, State, Site), ~ as.numeric(str_remove(as.character(.), "%"))))
 
 apportions_long <- markers_clean %>%
-  pivot_longer(cols = -Sample, names_to = "SourceTool", values_to = "Apportion") %>%
+  pivot_longer(cols = -c(Sample, State, Site, Nd, imp), names_to = "SourceTool", values_to = "Apportion") %>%
   mutate(
     Tool   = ifelse(str_ends(SourceTool, "_f"), "FEAST", "mST2"),
     Source = sub("_[fm]$", "", SourceTool)
@@ -509,11 +510,25 @@ ma_results <- ma_long_extended %>%
         })
       }) %>%
       mutate(p_adj_FDR = p.adjust(p_value, method = "BH"))
+  ) %>%
+  bind_rows(
+    markers_long %>%
+      dplyr::select(Sample, Marker, dPCR_conc) %>%
+      left_join(markers_clean %>% dplyr::select(Sample, Nd), by = "Sample") %>%
+      group_by(Marker) %>%
+      summarise(cor_test = list(safe_cor(Nd, dPCR_conc)), .groups = "drop") %>%
+      mutate(
+        Tool      = "Nd",
+        rho       = sapply(cor_test, function(x) if (is.list(x)) x$estimate else NA),
+        p_value   = sapply(cor_test, function(x) if (is.list(x)) x$p.value  else NA),
+        p_adj_FDR = p.adjust(p_value, method = "BH")
+      ) %>%
+      dplyr::select(Marker, Tool, rho, p_value, p_adj_FDR)
   )
 
 print(ma_results)
 write.csv(ma_results, "correlation_results.csv", row.names = FALSE)
-
+                           
 # --- 3f: Plot LOESS smooth ribbons ---
 source_map <- c("Cat" = "cat", "Chicken" = "chick", "Cow" = "cow", "Dog" = "dog",
                 "Goat" = "goat", "Pig" = "pig", "Septage" = "sep", "Wastewater" = "ww")
